@@ -225,24 +225,42 @@ See [docs/architecture.md](docs/architecture.md) for a detailed Mermaid diagram 
 | `make deploy-product` | Deploy Use Case 1 (routing + external backends) |
 | `make deploy-auth` | Deploy Use Case 2 (Keycloak + JWT auth) |
 | `make deploy-ratelimit` | Deploy Use Case 3 (local rate limiting) |
-| `make test-all` | Run all test suites |
+| `make test-kgateway` | Test control plane |
+| `make test-product` | Test Use Case 1 routing |
+| `make test-auth` | Test Use Case 2 authentication |
+| `make test-ratelimit` | Test Use Case 3 rate limiting |
 
 ---
 
 ## 🧪 Testing Strategy
 
-Each use case has automated tests that verify:
+Each use case has independent tests that verify:
 - **Resource existence** (namespaces, deployments, policies)
 - **Resource health** (pods ready, gateways programmed)
 - **HTTP behavior** (routes work, auth enforced, rate limits enforced)
 
 Tests use `bash` + `kubectl` + `curl` — no external frameworks required.
 
+**Test Dependencies:**
+- `test-kgateway` — always runs first (no dependencies)
+- `test-product` — requires: `make deploy-product`
+- `test-auth` — requires: `make deploy-product` + `make deploy-auth`
+- `test-ratelimit` — requires: `make deploy-product` + `make deploy-auth` + `make deploy-ratelimit`
+
+**Run individually:**
 ```bash
-bash tests/test-kgateway.sh  # 5 checks (control plane)
-bash tests/test-product.sh   # 8 checks (routing + external)
-bash tests/test-auth.sh      # 8 checks (JWT + Keycloak)
-bash tests/test-ratelimit.sh # 7 checks (rate limiting per-user)
+make test-kgateway   # Test control plane (5 checks)
+make test-product    # Test routing (8 checks) — requires deploy-product
+make test-auth       # Test JWT auth (8 checks) — requires deploy-auth
+make test-ratelimit  # Test rate limiting (4 checks) — requires deploy-ratelimit
+```
+
+Or run directly:
+```bash
+bash tests/test-kgateway.sh
+bash tests/test-product.sh
+bash tests/test-auth.sh
+bash tests/test-ratelimit.sh
 ```
 
 All tests must pass with `HTTP 200` or expected status codes.
