@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# tests/test-product.sh — verifies Use Case 1: product proxy + endpoints
+set -euo pipefail
+
+PASS=0
+FAIL=0
+NAMESPACE="product"
+GW_HOST="localhost"
+GW_PORT="8080"
+BASE_URL="http://${GW_HOST}:${GW_PORT}"
+
+check() {
+  local desc="$1"
+  local cmd="$2"
+  if eval "$cmd" &>/dev/null; then
+    echo "  [PASS] $desc"
+    PASS=$((PASS + 1))
+  else
+    echo "  [FAIL] $desc"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+check_http() {
+  local desc="$1"
+  local url="$2"
+  local expected_status="${3:-200}"
+  local status
+  status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" || echo "000")
+  if [[ "$status" == "$expected_status" ]]; then
+    echo "  [PASS] $desc (HTTP $status)"
+    PASS=$((PASS + 1))
+  else
+    echo "  [FAIL] $desc (expected HTTP $expected_status, got HTTP $status)"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo ""
+echo "=== Use Case 1 — Product Proxy tests ==="
+
+check "product namespace exists" \
+  "kubectl get namespace ${NAMESPACE}"
+
+check "product-gateway exists and is Programmed" \
+  "kubectl get gateway product-gateway -n ${NAMESPACE} -o jsonpath='{.status.conditions[?(@.type==\"Programmed\")].status}' | grep -q True"
+
+check "product-api deployment is available" \
+  "kubectl get deployment product-api -n ${NAMESPACE} -o jsonpath='{.status.availableReplicas}' | grep -E '^[1-9]'"
+
+check "HTTPRoute product-api-route is accepted" \
+  "kubectl get httproute product-api-route -n ${NAMESPACE} -o jsonpath='{.status.parents[0].conditions[?(@.type==\"Accepted\")].status}' | grep -q True"
+
+check "HTTPRoute httpbin-route is accepted" \
+  "kubectl get httproute httpbin-route -n ${NAMESPACE} -o jsonpath='{.status.parents[0].conditions[?(@.type==\"Accepted\")].status}' | grep -q True"
+
+echo ""
+echo "--- HTTP routing tests (requires cluster port-forward active) ---"
+
+check_http "GET /api/get -> product-api (internal)" \
+  "${BASE_URL}/api/get"
+
+check_http "GET /httpbin/get -> httpbun.com (external)" \
+  "${BASE_URL}/httpbin/get"
+
+check_http "GET /nonexistent -> 404 from gateway" \
+  "${BASE_URL}/nonexistent" "404"
+
+echo ""
+echo "Results: ${PASS} passed, ${FAIL} failed"
+[[ $FAIL -eq 0 ]]

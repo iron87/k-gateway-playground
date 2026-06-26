@@ -1,0 +1,17 @@
+---
+# Dedicated (non-shared) Gateway for the product domain.
+# Each team owns their own Gateway — no shared ingress.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: product-gateway
+  namespace: product
+spec:
+  gatewayClassName: kgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+      allowedRoutes:
+        namespaces:
+          from: Same   # only routes in this namespace can attach

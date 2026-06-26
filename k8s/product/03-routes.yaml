@@ -1,0 +1,65 @@
+---
+# Route /api/* -> internal product-api service
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: product-api-route
+  namespace: product
+spec:
+  parentRefs:
+    - name: product-gateway
+      namespace: product
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: product-api
+          port: 80
+---
+# Backend CRD: static external backend pointing to httpbun.com (httpbin-compatible)
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: httpbin-backend
+  namespace: product
+spec:
+  type: Static
+  static:
+    hosts:
+      - host: httpbun.com
+        port: 80
+---
+# Route /httpbin/* -> external httpbun.com via Backend CRD
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: httpbin-route
+  namespace: product
+spec:
+  parentRefs:
+    - name: product-gateway
+      namespace: product
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /httpbin
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            hostname: httpbun.com
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - group: gateway.kgateway.dev
+          kind: Backend
+          name: httpbin-backend
