@@ -1,0 +1,17 @@
+---
+# ReferenceGrant: allow GatewayExtensions in namespace 'product'
+# to reference the Keycloak Service in namespace 'keycloak'
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-product-to-keycloak
+  namespace: keycloak
+spec:
+  from:
+    - group: gateway.kgateway.dev
+      kind: GatewayExtension
+      namespace: product
+  to:
+    - group: ""
+      kind: Service
+      name: keycloak

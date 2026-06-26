@@ -1,0 +1,43 @@
+---
+# GatewayExtension: JWT provider backed by Keycloak OIDC JWKS
+# The remote JWKS URL points to Keycloak's public key endpoint for realm 'playground'
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: GatewayExtension
+metadata:
+  name: keycloak-jwt
+  namespace: product
+spec:
+  jwt:
+    validationMode: Strict      # reject requests without a valid JWT
+    providers:
+      - name: keycloak
+        # Note: issuer check omitted — token iss changes based on how Keycloak
+        # is accessed (port-forward vs cluster-internal). Signature via JWKS is enforced.
+        jwks:
+          remote:
+            url: "http://keycloak.keycloak.svc.cluster.local:8080/realms/playground/protocol/openid-connect/certs"
+            backendRef:
+              name: keycloak
+              namespace: keycloak
+              port: 8080
+        claimsToHeaders:
+          - name: preferred_username
+            header: x-user
+          - name: email
+            header: x-email
+        forwardToken: false     # strip the Authorization header upstream
+---
+# TrafficPolicy: attach JWT auth to all routes on product-gateway
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: product-jwt-auth
+  namespace: product
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: product-gateway
+  jwtAuth:
+    extensionRef:
+      name: keycloak-jwt

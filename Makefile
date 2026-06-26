@@ -19,6 +19,10 @@ kgateway: ## Install Gateway API CRDs + kgateway
 deploy-product: ## Deploy Use Case 1 — product proxy + endpoints
 	@scripts/deploy-product.sh
 
+deploy-auth: ## Deploy Use Case 2 — Keycloak + JWT authentication
+	@scripts/deploy-auth.sh
+
 test-all: ## Run full test suite
 	@bash tests/test-kgateway.sh
 	@bash tests/test-product.sh
+	@bash tests/test-auth.sh
