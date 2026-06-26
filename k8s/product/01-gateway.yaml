@@ -1,6 +1,7 @@
 ---
 # Dedicated (non-shared) Gateway for the product domain.
 # Each team owns their own Gateway — no shared ingress.
+# Supports both HTTP and HTTPS with TLS termination.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -14,4 +15,14 @@ spec:
       port: 8080
       allowedRoutes:
         namespaces:
-          from: Same   # only routes in this namespace can attach
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 8443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: Same

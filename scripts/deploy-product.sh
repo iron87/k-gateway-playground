@@ -2,18 +2,22 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Use Case 1 — Product Proxy (dedicated, non-shared Gateway)
+# Use Case 1 — Product Proxy with Internal & External Endpoints
 #
 # Deploys:
 #   - Namespace: product
-#   - GatewayClass: kgateway (cluster-scoped, already exists)
-#   - Gateway: product-gateway  (dedicated, non-shared — owns its own LB)
-#   - Deployment + Service: product-api  (mock internal service)
-#   - HTTPRoute: /api  → product-api (internal)
-#   - HTTPRoute: /httpbin → httpbin.org (external, via HTTPRoute backendRef URL)
+#   - TLS Secret: gateway-tls (self-signed cert for gateway.local)
+#   - Gateway: product-gateway (HTTP:8080 + HTTPS:8443 with TLS termination)
+#   - Deployment + Service: product-api (internal mock service)
+#   - HTTPRoute: /api/* → product-api (internal, HTTP)
+#   - HTTPRoute: /httpbin/* → httpbun.com (external)
+#   - NO authentication (Keycloak added in UC2)
 # ---------------------------------------------------------------------------
 
 NAMESPACE="product"
+
+echo "==> Creating TLS Secret for HTTPS termination..."
+bash scripts/create-tls-secret.sh
 
 echo "==> Applying product namespace and manifests..."
 kubectl apply -f k8s/product/
@@ -34,4 +38,11 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Use Case 1 deployed."
-kubectl get gateway,httproute,svc -n "${NAMESPACE}"
+echo ""
+echo "Access methods:"
+echo "  HTTP:  http://localhost:8080/api/get"
+echo "  HTTPS: https://gateway.local:8443/api/get (self-signed cert)"
+echo ""
+echo "For HTTPS: add to /etc/hosts: 127.0.0.1 gateway.local"
+echo ""
+kubectl get gateway,httproute,backend,deployment -n "${NAMESPACE}"

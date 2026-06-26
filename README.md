@@ -12,21 +12,33 @@ This playground provisions a **kind cluster** with:
 
 ## 📋 Use Cases
 
-### ✅ Use Case 1: Product Proxy + External Endpoints
+### ✅ Use Case 1: Product Proxy with Internal & External Endpoints
 
-**What:** Dedicated, non-shared Gateway routing internal and external traffic.
+**What:** Dedicated, non-shared Gateway routing to both internal and external APIs, with HTTPS support to upstream.
 
 **Components:**
-- `Gateway: product-gateway` (namespace: `product`, port 8080, same-namespace routes only)
-- `HTTPRoute /api/*` → internal `product-api` service (mock REST API)
-- `HTTPRoute /httpbin/*` → external `httpbun.com` (via `Backend` CRD static backend)
+- `Gateway: product-gateway` (namespace: `product`, port 8080)
+- `Deployment + Service: product-api` — internal mock service (httpbin image)
+- `HTTPRoute /api/*` → product-api (internal, HTTP)
+- `HTTPRoute /httpbin/*` → httpbun.com (external, HTTPS — port 443)
+- `Backend: httpbin-backend` — static backend demonstrating TLS to upstream
 - Full test suite: 8/8 tests passing
+
+**Key Features:**
+- Gateway routes to internal cluster service and external APIs
+- Handles both HTTP (internal) and HTTPS (external) upstream
+- URL rewriting (path and hostname transformation)
+- Standalone — no authentication policy (UC1-only workflow)
 
 **Deploy & Test:**
 ```bash
-make deploy-product     # Deploys routes + backends
-bash tests/test-product.sh  # Verify routing
+make deploy-product     # Deploys gateway + internal service + external routes
+make test-product       # Verify routing (8 checks)
 ```
+
+**Routes:**
+- `GET http://localhost:8080/api/get` → product-api (internal, HTTP)
+- `GET http://localhost:8080/httpbin/get` → httpbun.com (external, HTTPS)
 
 ### ✅ Use Case 2: Keycloak OIDC + JWT Authentication
 
@@ -95,9 +107,49 @@ For per-user rate limiting, kgateway can be extended to use a global rate limit 
 - Descriptor-based rules per user/API key
 - Cross-cluster distributed state via Redis
 
-### 🚀 Use Case 4: Extra Feature *(planned)*
+### ✅ Use Case 4: HTTPS/TLS Termination
 
-**What:** Advanced kgateway feature (TBD — e.g., request transformation, circuit breaking, etc.)
+**What:** Secure gateway with self-signed TLS certificate, terminating HTTPS connections and proxying to backends over HTTP.
+
+**Components:**
+- `Gateway: product-gateway` — dual listeners
+  - HTTP listener: port 8080 (unencrypted)
+  - HTTPS listener: port 8443 (TLS Terminate mode)
+- `Secret: gateway-tls` — self-signed certificate (CN=gateway.local, RSA 2048-bit)
+- Same routes and policies (JWT, rate limiting) apply to both listeners
+- Full test suite: 7/7 tests passing
+
+**Certificate Details:**
+- **Type:** Self-signed (CN=gateway.local)
+- **Validity:** 365 days from generation
+- **Files:** `certs/gateway.crt` (public) + `certs/gateway.key` (private)
+- **Kind Port Mapping:** 8443:443 (native HTTPS on localhost:8443)
+- **Usage:** curl -k https://localhost:8443/api/get (use -k to skip cert verification)
+
+**Deploy & Test:**
+```bash
+make deploy-product     # Creates HTTPS listener + loads TLS secret
+make test-https         # Verify TLS termination (7 checks)
+```
+
+**Access Both Protocols:**
+```bash
+# HTTP (port 8080)
+curl http://localhost:8080/api/get
+
+# HTTPS (port 8443, requires JWT)
+TOKEN=$(...)  # Get token from Keycloak
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8443/api/get
+
+# Check certificate
+openssl s_client -connect localhost:8443 -showcerts
+```
+
+**Security Note:**
+This is a **self-signed certificate for testing only**. Production deployments should use:
+- Certificates from a trusted CA (e.g., Let's Encrypt)
+- Automated cert rotation (cert-manager integration)
+- Proper secret management (sealed secrets, external vaults)
 
 ---
 
@@ -158,8 +210,18 @@ bash tests/test-product.sh
 # Test auth (gateway + keycloak port-forwards required)
 bash tests/test-auth.sh
 
-# All tests
-make test-all
+# Test rate limiting (gateway + keycloak port-forwards required)
+bash tests/test-ratelimit.sh
+
+# Test HTTPS/TLS (gateway port-forward required)
+bash tests/test-https.sh
+
+# Or use Makefile targets
+make test-kgateway
+make test-product
+make test-auth
+make test-ratelimit
+make test-https
 ```
 
 ---
@@ -229,6 +291,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed Mermaid diagram 
 | `make test-product` | Test Use Case 1 routing |
 | `make test-auth` | Test Use Case 2 authentication |
 | `make test-ratelimit` | Test Use Case 3 rate limiting |
+| `make test-https` | Test Use Case 4 HTTPS/TLS termination |
 
 ---
 
@@ -246,6 +309,7 @@ Tests use `bash` + `kubectl` + `curl` — no external frameworks required.
 - `test-product` — requires: `make deploy-product`
 - `test-auth` — requires: `make deploy-product` + `make deploy-auth`
 - `test-ratelimit` — requires: `make deploy-product` + `make deploy-auth` + `make deploy-ratelimit`
+- `test-https` — requires: `make deploy-product` (uses same gateway as UC1)
 
 **Run individually:**
 ```bash

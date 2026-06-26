@@ -24,7 +24,8 @@ spec:
         - name: product-api
           port: 80
 ---
-# Backend CRD: static external backend pointing to httpbun.com (httpbin-compatible)
+# Backend CRD: static external backend pointing to httpbun.com with HTTPS
+# Uses port 443 for TLS connection to external API
 apiVersion: gateway.kgateway.dev/v1alpha1
 kind: Backend
 metadata:
@@ -35,9 +36,9 @@ spec:
   static:
     hosts:
       - host: httpbun.com
-        port: 80
+        port: 443
 ---
-# Route /httpbin/* -> external httpbun.com via Backend CRD
+# Route /httpbin/* -> external httpbun.com (HTTPS) via Backend CRD
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

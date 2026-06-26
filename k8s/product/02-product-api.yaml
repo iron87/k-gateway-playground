@@ -27,12 +27,14 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
 ---
+# Service: product-api (ClusterIP, internal only)
 apiVersion: v1
 kind: Service
 metadata:
   name: product-api
   namespace: product
 spec:
+  type: ClusterIP
   selector:
     app: product-api
   ports:

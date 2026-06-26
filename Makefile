@@ -2,7 +2,7 @@ CLUSTER_NAME := kgateway-playground
 KGATEWAY_VERSION := 2.3.5
 GATEWAY_API_VERSION := v1.2.0
 
-.PHONY: help cluster-up cluster-down kgateway deploy-product deploy-auth deploy-ratelimit test-kgateway test-product test-auth test-ratelimit
+.PHONY: help cluster-up cluster-down kgateway deploy-product deploy-auth deploy-ratelimit test-kgateway test-product test-auth test-ratelimit test-https
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
@@ -36,3 +36,6 @@ test-auth: ## Test Use Case 2 — JWT authentication
 
 test-ratelimit: ## Test Use Case 3 — rate limiting
 	@bash tests/test-ratelimit.sh
+
+test-https: ## Test Use Case 4 — HTTPS/TLS termination
+	@bash tests/test-https.sh
