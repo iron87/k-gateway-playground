@@ -1,6 +1,6 @@
-# Architecture — kgateway Playground
+                                                                                        # Architecture — kgateway Playground
 
-## Use Cases 1 & 2 — Product Proxy + Keycloak JWT Auth
+## Use Cases 1, 2 & 3 — Product Proxy + Keycloak JWT Auth + Local Rate Limiting
 
 ```mermaid
 graph TD
@@ -15,11 +15,16 @@ graph TD
             kc_svc["Service: keycloak"]
         end
 
+        subgraph ratelimit_ns["Namespace: ratelimit"]
+            note_rl["(Namespace only — service disabled)\nFuture: Envoy RateLimit + Redis"]
+        end
+
         subgraph product["Namespace: product"]
             gw["Gateway: product-gateway\n(dedicated, non-shared)\nallowedRoutes: Same namespace"]
-            tp["TrafficPolicy: product-jwt-auth\n(JWT Strict mode)"]
-            ge["GatewayExtension: keycloak-jwt\n(JWKS from Keycloak)"]
-            rg["ReferenceGrant\nproduct → keycloak svc"]
+            tp_jwt["TrafficPolicy: product-jwt-auth\n(JWT Strict mode)"]
+            ge_jwt["GatewayExtension: keycloak-jwt\n(JWKS from Keycloak)"]
+            tp_rl["TrafficPolicy: product-rate-limit\n(Local token bucket)"]
+            rg_kc["ReferenceGrant\nproduct → keycloak svc"]
             r1["HTTPRoute: product-api-route\n/api/* → product-api"]
             r2["HTTPRoute: httpbin-route\n/httpbin/* → httpbun.com"]
             svc1["Service: product-api\n(ClusterIP :80)"]
@@ -29,16 +34,17 @@ graph TD
     end
 
     internet["httpbun.com\n(external)"]
-    client["HTTP Client\nlocalhost:8080\n(needs JWT)"]
+    client["HTTP Client\nlocalhost:8080\n(JWT required, rate limited)"]
     kc_client["Token client\nlocalhost:9080"]
 
     ctrl --> gc
     gc --> gw
-    gw --> tp
-    tp --> ge
-    ge -->|JWKS fetch| kc_svc
+    gw --> tp_jwt
+    gw --> tp_rl
+    tp_jwt --> ge_jwt
+    ge_jwt -->|JWKS fetch| kc_svc
     kc_svc --> kc
-    rg -->|grants access| kc_svc
+    rg_kc -->|grants access| kc_svc
     gw --> r1
     gw --> r2
     r1 --> svc1
@@ -60,7 +66,21 @@ graph TD
 | product-jwt-auth | TrafficPolicy | product | Enforces JWT (Keycloak) on all product-gateway routes |
 | keycloak-jwt | GatewayExtension | product | JWT provider config — fetches JWKS from Keycloak |
 | allow-product-to-keycloak | ReferenceGrant | keycloak | Allows cross-namespace JWKS backend reference |
+| product-rate-limit | TrafficPolicy | product | Local token bucket rate limiting (10 req/sec) |
 | product-api-route | HTTPRoute | product | Routes `/api/*` to internal product-api |
 | httpbin-route | HTTPRoute | product | Routes `/httpbin/*` to external httpbun.com |
 | product-api | Deployment+Service | product | Mock internal REST API |
 | httpbin-backend | Backend (Static) | product | Static route to httpbun.com:80 (httpbin-compatible) |
+
+---
+
+## Rate Limiting Implementation
+
+**Current:** Local token bucket (simple, no external service)
+- Token bucket: 10 max tokens, 10 tokens/second
+- Applied globally to all requests on product-gateway
+
+**Future Option:** Global rate limit service (per-user, distributed state)
+- Namespace: `ratelimit` (created but service disabled)
+- Would use: Envoy RateLimit gRPC service + Redis backend
+- Supports: per-user limits, cross-cluster state, descriptor-based rules

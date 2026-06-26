@@ -1,0 +1,13 @@
+---
+# Note: This file is kept for reference but is NOT used in the current setup.
+# We use local rate limiting with token bucket instead (see 03-rate-limit-policy.yaml)
+#
+# This would contain the Envoy RateLimit service deployment for future per-user
+# rate limiting. For now, keeping local token bucket approach for simplicity.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: ratelimit-service-disabled
+  namespace: ratelimit
+data:
+  note: "Global rate limit service approach — disabled in current version"

@@ -8,6 +8,9 @@ NAMESPACE="product"
 GW_HOST="localhost"
 GW_PORT="8080"
 BASE_URL="http://${GW_HOST}:${GW_PORT}"
+KC_PORT="9080"
+REALM="playground"
+CLIENT="product-client"
 
 check() {
   local desc="$1"
@@ -25,8 +28,9 @@ check_http() {
   local desc="$1"
   local url="$2"
   local expected_status="${3:-200}"
+  local extra_args="${4:-}"
   local status
-  status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" || echo "000")
+  status=$(eval "curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 ${extra_args} \"${url}\"" || echo "000")
   if [[ "$status" == "$expected_status" ]]; then
     echo "  [PASS] $desc (HTTP $status)"
     PASS=$((PASS + 1))
@@ -57,11 +61,32 @@ check "HTTPRoute httpbin-route is accepted" \
 echo ""
 echo "--- HTTP routing tests (requires cluster port-forward active) ---"
 
-check_http "GET /api/get -> product-api (internal)" \
-  "${BASE_URL}/api/get"
+# Get JWT token from Keycloak (required for UC2 auth)
+echo "  Getting JWT from Keycloak..."
+TOKEN=$(curl -sf --max-time 10 \
+  "http://localhost:${KC_PORT}/realms/${REALM}/protocol/openid-connect/token" \
+  -d "client_id=${CLIENT}" \
+  -d "username=test-user" \
+  -d "password=password123" \
+  -d "grant_type=password" \
+  2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
 
-check_http "GET /httpbin/get -> httpbun.com (external)" \
-  "${BASE_URL}/httpbin/get"
+if [[ -z "$TOKEN" ]]; then
+  echo "  [SKIP] Could not obtain JWT (port-forward :${KC_PORT} may not be active)"
+  # Still try requests without token to verify routing works
+  check_http "GET /api/get -> product-api (internal)" \
+    "${BASE_URL}/api/get" "401"
+  check_http "GET /httpbin/get -> httpbun.com (external)" \
+    "${BASE_URL}/httpbin/get" "401"
+else
+  echo "  ✓ JWT obtained (${#TOKEN} chars)"
+  
+  check_http "GET /api/get -> product-api (internal)" \
+    "${BASE_URL}/api/get" "200" "-H 'Authorization: Bearer ${TOKEN}'"
+  
+  check_http "GET /httpbin/get -> httpbun.com (external)" \
+    "${BASE_URL}/httpbin/get" "200" "-H 'Authorization: Bearer ${TOKEN}'"
+fi
 
 check_http "GET /nonexistent -> 404 from gateway" \
   "${BASE_URL}/nonexistent" "404"

@@ -1,0 +1,27 @@
+---
+# TrafficPolicy: Apply local rate limiting to product-gateway
+# Uses token bucket: 10 max tokens, 2 tokens per 1 second → ~2-3 req/sec sustained
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: product-rate-limit
+  namespace: product
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: product-gateway
+  rateLimit:
+    local:
+      # Percentage of requests for which rate limiting is enabled (100%)
+      percentEnabled: 100
+      # Percentage of requests for which rate limiting is enforced (100%)
+      percentEnforced: 100
+      # Token bucket configuration
+      tokenBucket:
+        # Fill interval: add tokens every 1 second
+        fillInterval: "1s"
+        # Max tokens: burst capacity
+        maxTokens: 10
+        # Tokens per fill: 10 tokens added every 1 second = 10 req/sec sustained
+        tokensPerFill: 10

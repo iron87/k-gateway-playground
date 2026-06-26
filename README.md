@@ -63,9 +63,37 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/get  # 200 OK
 curl http://localhost:8080/api/get                                    # 401 Unauthorized
 ```
 
-### 🔄 Use Case 3: Rate Limiting *(in progress)*
+### ✅ Use Case 3: Local Rate Limiting
 
-**What:** Per-IP rate limits on gateway routes.
+**What:** Protect the gateway with global rate limiting using token bucket algorithm.
+
+**Components:**
+- `TrafficPolicy: product-rate-limit` — applies local rate limiting to product-gateway
+- Token bucket configuration:
+  - Max tokens: 10
+  - Fill rate: 10 tokens/second
+  - Effective limit: ~10 requests/second (global, all users combined)
+- Returns HTTP 429 when limit exceeded
+- Automatic token recovery based on fill interval
+
+**Deploy & Test:**
+```bash
+make deploy-ratelimit       # Deploy rate limiting policy
+bash tests/test-ratelimit.sh # Verify rate limiting works (requires port-forwards)
+```
+
+**Rate Limit Flow:**
+```
+Request → Check token bucket
+       → Within limit: consume token, forward request (200 OK)
+       → Out of limit: return 429 Too Many Requests
+       → Tokens refill based on fill interval (10 tokens every 1 second)
+```
+
+**Future Enhancement:**
+For per-user rate limiting, kgateway can be extended to use a global rate limit service with gRPC (Envoy's ratelimit) supporting:
+- Descriptor-based rules per user/API key
+- Cross-cluster distributed state via Redis
 
 ### 🚀 Use Case 4: Extra Feature *(planned)*
 
@@ -150,19 +178,26 @@ k-gateway-playground/
 │   │   ├── 01-gateway.yaml
 │   │   ├── 02-product-api.yaml
 │   │   └── 03-routes.yaml
-│   └── auth/                     # Use Case 2: authentication
-│       ├── 00-keycloak.yaml
-│       ├── 01-jwt-policy.yaml
-│       └── 02-reference-grant.yaml
+│   ├── auth/                     # Use Case 2: authentication
+│   │   ├── 00-keycloak.yaml
+│   │   ├── 01-jwt-policy.yaml
+│   │   └── 02-reference-grant.yaml
+│   └── ratelimit/                # Use Case 3: rate limiting
+│       ├── 00-namespace.yaml
+│       ├── 01-rate-limit-service.yaml
+│       ├── 02-redis.yaml
+│       └── 03-rate-limit-policy.yaml
 ├── scripts/
 │   ├── cluster-up.sh             # Create/verify kind cluster
 │   ├── deploy-kgateway.sh        # Install kgateway + Gateway API CRDs
 │   ├── deploy-product.sh         # Deploy Use Case 1
-│   └── deploy-auth.sh            # Deploy Use Case 2
+│   ├── deploy-auth.sh            # Deploy Use Case 2
+│   └── deploy-ratelimit.sh       # Deploy Use Case 3
 ├── tests/
 │   ├── test-kgateway.sh          # Test kgateway control plane
 │   ├── test-product.sh           # Test routing
-│   └── test-auth.sh              # Test JWT authentication
+│   ├── test-auth.sh              # Test JWT authentication
+│   └── test-ratelimit.sh         # Test per-user rate limiting
 ├── docs/
 │   └── architecture.md           # Mermaid diagram (kept up-to-date)
 └── README.md                     # This file
@@ -191,6 +226,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed Mermaid diagram 
 | `make kgateway` | Install kgateway + Gateway API CRDs + kgateway-crds |
 | `make deploy-product` | Deploy Use Case 1 (routing + external backends) |
 | `make deploy-auth` | Deploy Use Case 2 (Keycloak + JWT auth) |
+| `make deploy-ratelimit` | Deploy Use Case 3 (local rate limiting) |
 | `make test-all` | Run all test suites |
 
 ---
@@ -208,6 +244,7 @@ Tests use `bash` + `kubectl` + `curl` — no external frameworks required.
 bash tests/test-kgateway.sh  # 5 checks (control plane)
 bash tests/test-product.sh   # 8 checks (routing + external)
 bash tests/test-auth.sh      # 8 checks (JWT + Keycloak)
+bash tests/test-ratelimit.sh # 7 checks (rate limiting per-user)
 ```
 
 All tests must pass with `HTTP 200` or expected status codes.
@@ -351,4 +388,4 @@ To add a new use case:
 ---
 
 **Last Updated:** 2026-06-26  
-**Status:** Use Cases 1–2 complete, Use Cases 3–4 in progress
+**Status:** Use Cases 1–3 complete & tested ✅

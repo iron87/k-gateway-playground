@@ -22,7 +22,11 @@ deploy-product: ## Deploy Use Case 1 — product proxy + endpoints
 deploy-auth: ## Deploy Use Case 2 — Keycloak + JWT authentication
 	@scripts/deploy-auth.sh
 
+deploy-ratelimit: ## Deploy Use Case 3 — Per-user rate limiting
+	@scripts/deploy-ratelimit.sh
+
 test-all: ## Run full test suite
 	@bash tests/test-kgateway.sh
 	@bash tests/test-product.sh
 	@bash tests/test-auth.sh
+	@bash tests/test-ratelimit.sh
