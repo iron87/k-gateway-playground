@@ -184,8 +184,6 @@ k-gateway-playground/
 │   │   └── 02-reference-grant.yaml
 │   └── ratelimit/                # Use Case 3: rate limiting
 │       ├── 00-namespace.yaml
-│       ├── 01-rate-limit-service.yaml
-│       ├── 02-redis.yaml
 │       └── 03-rate-limit-policy.yaml
 ├── scripts/
 │   ├── cluster-up.sh             # Create/verify kind cluster

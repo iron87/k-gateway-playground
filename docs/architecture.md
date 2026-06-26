@@ -16,7 +16,7 @@ graph TD
         end
 
         subgraph ratelimit_ns["Namespace: ratelimit"]
-            note_rl["(Namespace only — service disabled)\nFuture: Envoy RateLimit + Redis"]
+            note_rl["(Empty — for future use)\nWould hold: Envoy RateLimit + Redis"]
         end
 
         subgraph product["Namespace: product"]
